@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-04T06:23:29.309Z",
+  "timezone": "Europe/Berlin",
+  "node": "v24.19.0",
+  "packages": {
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "@elevenlabs/react": "1.16.0",
+    "@elevenlabs/client": "1.26.0",
+    "@elevenlabs/elevenlabs-js": "2.70.0",
+    "@anthropic-ai/sdk": "0.131.0",
+    "zod": "4.6.5",
+    "sharp": "0.34.5"
+  },
+  "configuration": {
+    "anthropic": true,
+    "elevenlabs": true,
+    "interviewer": true,
+    "voice": true
+  },
+  "sqlite": {
+    "status": "works",
+    "evidence": "In-memory BEGIN IMMEDIATE/COMMIT/read"
+  },
+  "liveCapabilities": {
+    "voice_webrtc": {
+      "status": "blocked",
+      "verified": false,
+      "reason": "Manuelle Live-Probe noch erforderlich."
+    },
+    "barge_in": {
+      "status": "blocked",
+      "verified": false,
+      "reason": "Manuelle Live-Probe noch erforderlich."
+    },
+    "expressive_mode": {
+      "status": "blocked",
+      "verified": false,
+      "reason": "Manuelle Live-Probe noch erforderlich."
+    },
+    "vision_masking_latency": {
+      "status": "blocked",
+      "verified": false,
+      "reason": "Manuelle Live-Probe noch erforderlich."
+    },
+    "scribe_parallel_10min": {
+      "status": "blocked",
+      "verified": false,
+      "reason": "Manuelle Live-Probe noch erforderlich."
+    },
+    "original_audio_alignment": {
+      "status": "blocked",
+      "verified": false,
+      "reason": "Manuelle Live-Probe noch erforderlich."
+    },
+    "off_record_network_stop": {
+      "status": "blocked",
+      "verified": false,
+      "reason": "Manuelle Live-Probe noch erforderlich."
+    },
+    "tutor_kb_procedure_pinning": {
+      "status": "blocked",
+      "verified": false,
+      "reason": "Manuelle Live-Probe noch erforderlich."
+    }
+  },
+  "limitations": [
+    "Mock-/Vertragstests ersetzen keine Live-Probe.",
+    "Keine Nachkäufe; vorhandene Credits freigegeben.",
+    "A1-Live-Abnahme bleibt bis zur Provider-/Browserprobe offen."
+  ]
+}

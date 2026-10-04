@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "testData": true,
+  "warning": "Nur Referenz-/Testdaten. Niemals in eine Live-Session laden.",
+  "screenEvent": {
+    "id": "ev-1",
+    "sequence": 1,
+    "epoch": 1,
+    "atMs": 0,
+    "caseId": "case-test",
+    "source": "screen_observation",
+    "facts": {
+      "vendorKnown": true,
+      "poMatches": true,
+      "varianceBps": 150,
+      "goodsReceiptConfirmed": true,
+      "bankDetailsChanged": false,
+      "verificationStatus": null
+    },
+    "frameId": "frame-test"
+  },
+  "segment": {
+    "id": "ts-1",
+    "sequence": 1,
+    "epoch": 1,
+    "atMs": 0,
+    "endMs": 1000,
+    "caseId": "case-test",
+    "source": "expert_statement",
+    "text": "Ab 200 Basispunkten stoppen. Darunter freigeben, wenn Lieferant bekannt, Bestellung passend, Wareneingang bestätigt und Bankdaten unverändert sind.",
+    "committed": true,
+    "audioId": null,
+    "timing": "audio_unavailable"
+  },
+  "patch": {
+    "baseDraftRevision": 0,
+    "claims": [
+      {
+        "id": "cl-1",
+        "segmentId": "ts-1",
+        "eventIds": ["ev-1"],
+        "start": 0,
+        "end": 147,
+        "quote": "Ab 200 Basispunkten stoppen. Darunter freigeben, wenn Lieferant bekannt, Bestellung passend, Wareneingang bestätigt und Bankdaten unverändert sind.",
+        "meaning": "Ab 200 Basispunkten stoppen. Darunter freigeben, wenn Lieferant bekannt, Bestellung passend, Wareneingang bestätigt und Bankdaten unverändert sind.",
+        "origin": "expert_statement",
+        "review": "draft",
+        "supersedesClaimId": null
+      }
+    ],
+    "rules": [
+      {
+        "stepId": "decision-spike",
+        "scopeId": "scope-spike",
+        "requiredCapabilityIds": ["sandbox_decide"],
+        "claimIds": ["cl-1"],
+        "evidenceIds": ["ev-1", "ts-1"],
+        "review": "draft",
+        "usage": "exercise_only",
+        "id": "r-1",
+        "when": {
+          "kind": "compare",
+          "field": "varianceBps",
+          "op": "gte",
+          "value": 200
+        },
+        "effect": {
+          "kind": "prohibit",
+          "action": "approve"
+        }
+      },
+      {
+        "stepId": "decision-spike",
+        "scopeId": "scope-spike",
+        "requiredCapabilityIds": ["sandbox_decide"],
+        "claimIds": ["cl-1"],
+        "evidenceIds": ["ev-1", "ts-1"],
+        "review": "draft",
+        "usage": "exercise_only",
+        "id": "r-2",
+        "when": {
+          "kind": "all",
+          "items": [
+            {
+              "kind": "compare",
+              "field": "varianceBps",
+              "op": "lt",
+              "value": 200
+            },
+            {
+              "kind": "compare",
+              "field": "vendorKnown",
+              "op": "eq",
+              "value": true
+            },
+            {
+              "kind": "compare",
+              "field": "poMatches",
+              "op": "eq",
+              "value": true
+            },
+            {
+              "kind": "compare",
+              "field": "goodsReceiptConfirmed",
+              "op": "eq",
+              "value": true
+            },
+            {
+              "kind": "compare",
+              "field": "bankDetailsChanged",
+              "op": "eq",
+              "value": false
+            }
+          ]
+        },
+        "effect": {
+          "kind": "permit",
+          "action": "approve"
+        }
+      }
+    ],
+    "gaps": [],
+    "answerLinks": []
+  },
+  "confirmations": [
+    {
+      "id": "cf-1",
+      "sessionId": "session-test",
+      "kind": "assignment",
+      "subjectHash": "c4629bdb4e7af70c03314aa5bc22aaa2a65202fe9d5fb541b59ff77c85886450",
+      "scopeId": "scope-spike",
+      "actorId": "expert-test",
+      "at": 0
+    },
+    {
+      "id": "cf-2",
+      "sessionId": "session-test",
+      "kind": "representation",
+      "subjectHash": "c4629bdb4e7af70c03314aa5bc22aaa2a65202fe9d5fb541b59ff77c85886450",
+      "scopeId": "scope-spike",
+      "actorId": "expert-test",
+      "at": 0
+    },
+    {
+      "id": "cf-3",
+      "sessionId": "session-test",
+      "kind": "domain_validity",
+      "subjectHash": "c4629bdb4e7af70c03314aa5bc22aaa2a65202fe9d5fb541b59ff77c85886450",
+      "scopeId": "scope-spike",
+      "actorId": "expert-test",
+      "at": 0
+    },
+    {
+      "id": "cf-4",
+      "sessionId": "session-test",
+      "kind": "version_release",
+      "subjectHash": "c4629bdb4e7af70c03314aa5bc22aaa2a65202fe9d5fb541b59ff77c85886450",
+      "scopeId": "scope-spike",
+      "actorId": "process-owner-test",
+      "at": 0
+    }
+  ],
+  "snapshot": {
+    "id": "v-1",
+    "processId": "process-test",
+    "sessionId": "session-test",
+    "contentHash": "c4629bdb4e7af70c03314aa5bc22aaa2a65202fe9d5fb541b59ff77c85886450",
+    "sourceMode": "replay",
+    "scopeId": "scope-spike",
+    "gaps": [],
+    "answerLinks": [],
+    "claims": [
+      {
+        "id": "cl-1",
+        "segmentId": "ts-1",
+        "eventIds": ["ev-1"],
+        "start": 0,
+        "end": 147,
+        "quote": "Ab 200 Basispunkten stoppen. Darunter freigeben, wenn Lieferant bekannt, Bestellung passend, Wareneingang bestätigt und Bankdaten unverändert sind.",
+        "meaning": "Ab 200 Basispunkten stoppen. Darunter freigeben, wenn Lieferant bekannt, Bestellung passend, Wareneingang bestätigt und Bankdaten unverändert sind.",
+        "origin": "expert_statement",
+        "review": "expert_confirmed",
+        "supersedesClaimId": null
+      }
+    ],
+    "rules": [
+      {
+        "stepId": "decision-spike",
+        "scopeId": "scope-spike",
+        "requiredCapabilityIds": ["sandbox_decide"],
+        "claimIds": ["cl-1"],
+        "evidenceIds": ["ev-1", "ts-1"],
+        "review": "expert_confirmed",
+        "usage": "exercise_only",
+        "id": "r-1",
+        "when": {
+          "kind": "compare",
+          "field": "varianceBps",
+          "op": "gte",
+          "value": 200
+        },
+        "effect": {
+          "kind": "prohibit",
+          "action": "approve"
+        }
+      },
+      {
+        "stepId": "decision-spike",
+        "scopeId": "scope-spike",
+        "requiredCapabilityIds": ["sandbox_decide"],
+        "claimIds": ["cl-1"],
+        "evidenceIds": ["ev-1", "ts-1"],
+        "review": "expert_confirmed",
+        "usage": "exercise_only",
+        "id": "r-2",
+        "when": {
+          "kind": "all",
+          "items": [
+            {
+              "kind": "compare",
+              "field": "varianceBps",
+              "op": "lt",
+              "value": 200
+            },
+            {
+              "kind": "compare",
+              "field": "vendorKnown",
+              "op": "eq",
+              "value": true
+            },
+            {
+              "kind": "compare",
+              "field": "poMatches",
+              "op": "eq",
+              "value": true
+            },
+            {
+              "kind": "compare",
+              "field": "goodsReceiptConfirmed",
+              "op": "eq",
+              "value": true
+            },
+            {
+              "kind": "compare",
+              "field": "bankDetailsChanged",
+              "op": "eq",
+              "value": false
+            }
+          ]
+        },
+        "effect": {
+          "kind": "permit",
+          "action": "approve"
+        }
+      }
+    ],
+    "confirmationIds": ["cf-1", "cf-2", "cf-3", "cf-4"],
+    "usage": "exercise_only",
+    "acceptanceProfile": "technical_spike",
+    "revoked": false
+  },
+  "publish": {
+    "requestId": "publish-test",
+    "expectedDraftRevision": 1,
+    "scopeId": "scope-spike",
+    "contentHash": "c4629bdb4e7af70c03314aa5bc22aaa2a65202fe9d5fb541b59ff77c85886450",
+    "confirmationIds": ["cf-1", "cf-2", "cf-3", "cf-4"]
+  },
+  "action": {
+    "requestId": "action-test",
+    "exerciseRunId": "run-test",
+    "action": "approve",
+    "expectedRecordRevision": 7,
+    "expectedFactsRevision": 3,
+    "versionId": "v-1",
+    "idempotencyKey": "attempt-1"
+  },
+  "blockedResponse": {
+    "requestId": "action-test",
+    "data": {
+      "outcome": "blocked",
+      "committed": false,
+      "recordRevision": 7,
+      "factsRevision": 3,
+      "versionId": "v-1",
+      "ruleIds": ["r-1"],
+      "evidenceIds": ["ev-1", "ts-1"]
+    }
+  },
+  "transitions": {
+    "ready": ["capture"],
+    "capture": ["paused", "off_record", "drafting"],
+    "paused": ["capture", "off_record", "drafting"],
+    "off_record": ["capture"],
+    "drafting": ["debrief"],
+    "debrief": ["teachback"],
+    "teachback": ["review", "debrief"],
+    "review": ["published", "debrief"],
+    "published": []
+  }
+}

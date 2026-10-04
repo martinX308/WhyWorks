@@ -1,0 +1,144 @@
+{
+  "date": "2026-10-04T06:49:11.447Z",
+  "previousEvidenceDate": "2026-10-04T06:47:34.362Z",
+  "source": "synthetic_provider_smoke",
+  "countsAsA1LiveAcceptance": false,
+  "countsAsA2LiveAcceptance": false,
+  "model": "claude-sonnet-5-5",
+  "checks": [
+    {
+      "name": "interviewer_configuration",
+      "status": "passed",
+      "durationMs": 359,
+      "evidence": {
+        "promptMatches": true,
+        "recordVoice": false,
+        "versionPresent": true,
+        "language": "en"
+      }
+    },
+    {
+      "name": "webrtc_token_issuance",
+      "status": "passed",
+      "durationMs": 566,
+      "evidence": {
+        "issued": true,
+        "versionPinned": true,
+        "browserConnected": false
+      }
+    },
+    {
+      "name": "teachback_tts",
+      "status": "passed",
+      "durationMs": 1718,
+      "evidence": {
+        "wavBytes": 401284,
+        "durationSeconds": 12.53875,
+        "inputCharacters": 210,
+        "syntheticSpeech": true
+      }
+    },
+    {
+      "name": "scribe_realtime_with_timestamps",
+      "status": "passed",
+      "durationMs": 13686,
+      "evidence": {
+        "text": "Stop approval at 200 basis points or more. Below 200 basis points, approve only if the vendor is known, the purchase order matches, goods receipt is confirmed, and bank details have not changed.",
+        "wordCount": 65,
+        "syntheticSpeech": true
+      }
+    },
+    {
+      "name": "claude_vision_structured_output",
+      "status": "passed",
+      "durationMs": 3286,
+      "evidence": {
+        "facts": {
+          "vendorKnown": true,
+          "poMatches": true,
+          "varianceBps": 150,
+          "goodsReceiptConfirmed": true,
+          "bankDetailsChanged": false,
+          "verificationStatus": null
+        },
+        "usage": {
+          "input_tokens": 1654,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 218,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "service_tier": "standard",
+          "inference_geo": "global"
+        },
+        "syntheticImage": true
+      }
+    },
+    {
+      "name": "a2_question_planner",
+      "status": "passed",
+      "durationMs": 2881,
+      "evidence": {
+        "question": "At what point would you stop and escalate this invoice instead of approving it, given the 150 bps variance?",
+        "kind": "guardrail",
+        "sourceReferencesValid": true,
+        "usage": {
+          "input_tokens": 1576,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 113,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "service_tier": "standard",
+          "inference_geo": "global"
+        }
+      }
+    },
+    {
+      "name": "claude_extraction_and_server_gate",
+      "status": "passed",
+      "durationMs": 21446,
+      "evidence": {
+        "claimCount": 2,
+        "ruleCount": 2,
+        "exactQuotesValidated": true,
+        "permit": true,
+        "stop": true,
+        "unknownNotAllowed": true,
+        "usage": {
+          "input_tokens": 4686,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 2370,
+          "output_tokens_details": {
+            "thinking_tokens": 978
+          },
+          "service_tier": "standard",
+          "inference_geo": "global"
+        },
+        "note": "Confirmation simulated only within isolated synthetic gate probe; nothing published."
+      }
+    }
+  ],
+  "limitations": [
+    "Synthetic image and generated speech; no human expert or browser microphone.",
+    "WebRTC token issuance does not prove an established browser conversation.",
+    "No ten-minute parallel capture, barge-in or Off record network proof.",
+    "No Challenge publish or live question quotas certified.",
+    "Recorded token usage covers retained successful responses, not all diagnostic attempts; provider currency charges not measured."
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "name": "operational-blueprint",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "node scripts/runtime.mjs node_modules/next/dist/bin/next dev --hostname 127.0.0.1",
+    "build": "node scripts/runtime.mjs node_modules/next/dist/bin/next build",
+    "start": "node scripts/runtime.mjs node_modules/next/dist/bin/next start --hostname 127.0.0.1",
+    "typecheck": "node scripts/runtime.mjs node_modules/typescript/bin/tsc --noEmit",
+    "test": "node scripts/runtime.mjs node_modules/vitest/vitest.mjs run",
+    "test:e2e": "node scripts/runtime.mjs node_modules/@playwright/test/cli.js test",
+    "test:live-smoke": "node scripts/runtime.mjs --import tsx scripts/live-smoke.ts",
+    "capabilities": "node scripts/runtime.mjs --import tsx scripts/capabilities.ts",
+    "provision:interviewer": "node scripts/runtime.mjs --import tsx scripts/provision-interviewer.ts",
+    "format": "prettier --write src tests scripts contracts package.json tsconfig.json next.config.ts playwright.config.ts vitest.config.ts",
+    "reference-package": "node scripts/runtime.mjs --import tsx scripts/reference-package.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@elevenlabs/client": "^1.12.0",
+    "@elevenlabs/elevenlabs-js": "^2.60.0",
+    "@elevenlabs/react": "^1.12.0",
+    "@tailwindcss/postcss": "^4.1.18",
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "sharp": "0.34.5",
+    "tailwindcss": "^4.1.18",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.1",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "prettier": "^3.9.9",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "type": "module"
+}
