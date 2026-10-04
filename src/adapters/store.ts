@@ -23,6 +23,7 @@ export const tables = [
 export type Table = (typeof tables)[number];
 export class Store {
   db: DatabaseSync;
+  private depth = 0;
   constructor(file = ':memory:') {
     this.db = new DatabaseSync(file);
     this.db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;');
@@ -59,14 +60,20 @@ export class Store {
     this.db.prepare(`DELETE FROM ${table} WHERE id=?`).run(id);
   }
   tx<T>(fn: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE');
+    const level = this.depth;
+    const savepoint = 'blueprint_' + level;
+    this.db.exec(level ? `SAVEPOINT ${savepoint}` : 'BEGIN IMMEDIATE');
+    this.depth++;
     try {
       const result = fn();
-      this.db.exec('COMMIT');
+      this.db.exec(level ? `RELEASE ${savepoint}` : 'COMMIT');
       return result;
     } catch (e) {
-      this.db.exec('ROLLBACK');
+      this.db.exec(level ? `ROLLBACK TO ${savepoint}` : 'ROLLBACK');
+      if (level) this.db.exec(`RELEASE ${savepoint}`);
       throw e;
+    } finally {
+      this.depth--;
     }
   }
   close() {

@@ -14,7 +14,10 @@ export function useResource<T>(path: string) {
         setError('');
       }
     } catch (e) {
-      if (requestGeneration === generation.current) setError((e as Error).message);
+      if (requestGeneration === generation.current) {
+        setData(null);
+        setError((e as Error).message);
+      }
     }
   }, [path]);
   useEffect(() => {

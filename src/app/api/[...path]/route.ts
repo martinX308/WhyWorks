@@ -1,3 +1,5 @@
+import { audited } from '@/application/api-audit';
+import { importReplay } from '@/application/replay';
 import { A3 } from '@/application/a3';
 import { ProposalInput, OptimizeInput, WorkflowSchema } from '@/domain/blueprint';
 import { NextRequest, NextResponse, after } from 'next/server';
@@ -7,7 +9,7 @@ import { validateFrame } from '@/adapters/frame';
 import { getStore } from '@/adapters/store';
 import { Blueprint, type Asset } from '@/application/service';
 import { AppError, requireThat } from '@/application/errors';
-import { enqueue, drain } from '@/application/operations';
+import { enqueue, drain, retry } from '@/application/operations';
 import { ElicitationService } from '@/application/elicitation';
 import { QuestionPlanSchema, rankCandidates } from '@/domain/elicitation';
 import { tokens, structured } from '@/adapters/providers';
@@ -75,6 +77,19 @@ async function route(req: NextRequest) {
       delete raw.requestId;
     }
     const body = <T>(schema: z.ZodType<T>) => schema.parse(raw);
+    // Owner views share this local demo identity with Learner. Enforce the
+    // independent boundary for direct API calls as well as navigation.
+    if (
+      path[0] === 'evidence' ||
+      (path[0] === 'processes' &&
+        path.length > 1 &&
+        path[1] !== 'challenge' &&
+        path[2] !== 'reset') ||
+      (path[0] === 'sessions' &&
+        method !== 'DELETE' &&
+        !(path[2] === 'provider-tokens' && raw.exerciseRunId))
+    )
+      app.knowledgeAccess(ownerId);
     let data: unknown;
     if (path[0] === 'capabilities' && method === 'GET')
       data = {
@@ -87,7 +102,13 @@ async function route(req: NextRequest) {
         usage: 'exercise_only',
         liveVerified: false,
       };
-    else if (path[0] === 'processes' && path.length === 1) {
+    else if (path[0] === 'replay' && method === 'POST') {
+      const b = body(z.object({ title: z.string().min(1).max(200), bundle: z.unknown() }).strict());
+      data = await importReplay(app, ownerId, b.title, b.bundle);
+    } else if (path[0] === 'processes' && path[2] === 'reset' && method === 'POST') {
+      body(z.object({}).strict());
+      data = app.reset(ownerId, path[1]);
+    } else if (path[0] === 'processes' && path.length === 1) {
       if (method === 'GET')
         data = store.list<Process>('processes').filter((p) => p.ownerId === ownerId);
       else if (method === 'POST') {
@@ -229,11 +250,6 @@ async function route(req: NextRequest) {
       } else if (method === 'POST' && path[2] === 'provider-tokens') {
         const b = body(z.object({ exerciseRunId: str.optional() }).strict());
         data = await tokens(app, s, ownerId, b.exerciseRunId);
-        if (b.exerciseRunId) {
-          const run = app.owned<Run>('runs', b.exerciseRunId, ownerId);
-          run.assistance.push('voice_tutor');
-          store.put('runs', run, ownerId, s.id);
-        }
       } else if (method === 'POST' && path[2] === 'assets') {
         const b = body(
           z
@@ -532,7 +548,11 @@ async function route(req: NextRequest) {
       data = evidence;
     } else if (path[0] === 'source-segments' && method === 'DELETE')
       data = app.removeSource(ownerId, path[1]);
-    else if (path[0] === 'operations' && method === 'GET') {
+    else if (path[0] === 'operations' && path[2] === 'retry' && method === 'POST') {
+      body(z.object({}).strict());
+      data = retry(app, ownerId, path[1]);
+      after(() => drain(app));
+    } else if (path[0] === 'operations' && method === 'GET') {
       const { payload, ...operation } = app.owned<Operation>('operations', path[1], ownerId);
       data = operation;
       after(() => drain(app));
@@ -559,7 +579,8 @@ async function route(req: NextRequest) {
     );
   }
 }
-export const GET = route,
-  POST = route,
-  PATCH = route,
-  DELETE = route;
+const handler = audited(route);
+export const GET = handler,
+  POST = handler,
+  PATCH = handler,
+  DELETE = handler;

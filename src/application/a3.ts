@@ -484,6 +484,7 @@ export class A3 {
       const v = this.version(owner, processId, versionId),
         events = this.app.store.list<ScreenEvent>('events', v.sessionId),
         event = events.find((e) => e.id === baseEventId);
+      requireThat(!v.revoked, 409, 'revoked', 'Version widerrufen; keine neue Bewertung.');
       requireThat(
         event && v.claims.some((c) => c.eventIds.includes(event.id)),
         422,

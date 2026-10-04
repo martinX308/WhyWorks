@@ -45,6 +45,7 @@ function Inner({ id }: { id: string }) {
     [facts, setFacts] = useState<Facts | null>(null),
     [pending, setPending] = useState(false),
     [highlighted, setHighlighted] = useState<string | null>(null);
+  const voiceGeneration = useRef(0);
   const current = useRef(data);
   current.current = data;
   useEffect(() => {
@@ -89,9 +90,20 @@ function Inner({ id }: { id: string }) {
   const voice = useRef(conversation);
   voice.current = conversation;
   useEffect(() => {
-    if (error) voice.current.endSession();
+    if (error) {
+      voiceGeneration.current++;
+      setEvidence(null);
+      setHighlighted(null);
+      voice.current.endSession();
+    }
   }, [error]);
-  useEffect(() => () => voice.current.endSession(), []);
+  useEffect(
+    () => () => {
+      voiceGeneration.current++;
+      voice.current.endSession();
+    },
+    [],
+  );
   async function perform(fn: () => Promise<unknown>) {
     try {
       setError('');
@@ -104,33 +116,69 @@ function Inner({ id }: { id: string }) {
   async function commit() {
     setPending(true);
     try {
-      if (!data!.run.firstAttempt) await api('a4/' + id + '/attempts', 'POST', { action, reason });
-      const response = await api<NonNullable<typeof result>>('a4/' + id + '/actions', 'POST', {
-        action,
-        expectedRecordRevision: data!.case.recordRevision,
-        expectedFactsRevision: data!.case.factsRevision,
-        idempotencyKey: crypto.randomUUID(),
-      });
+      const latest = await api<Data>('a4/' + id + '/context');
+      if (!latest.run.firstAttempt) await api('a4/' + id + '/attempts', 'POST', { action, reason });
+      const storageKey = 'blueprint-pending-action-' + id;
+      let request = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+      if (!request) {
+        request = {
+          action,
+          expectedRecordRevision: latest.case.recordRevision,
+          expectedFactsRevision: latest.case.factsRevision,
+          idempotencyKey: crypto.randomUUID(),
+        };
+        sessionStorage.setItem(storageKey, JSON.stringify(request));
+      }
+      const response = await api<NonNullable<typeof result>>(
+        'a4/' + id + '/actions',
+        'POST',
+        request,
+      );
+      sessionStorage.removeItem(storageKey);
       setResult(response);
       voice.current.sendContextualUpdate('SERVER_GATE ' + JSON.stringify(response));
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        (e as Error).message +
+          ' Der gespeicherte Request kann mit demselben Schlüssel erneut geprüft werden.',
+      );
     } finally {
       setPending(false);
     }
   }
+  function abandonPendingRequest() {
+    sessionStorage.removeItem('blueprint-pending-action-' + id);
+    setError(
+      'Veralteten Request verworfen. Aktuelle Revision prüfen; bei geändertem Erstfall neue Übung starten.',
+    );
+    void refresh();
+  }
   async function startVoice() {
+    const generation = voiceGeneration.current;
     const token = await api<{ conversationToken: string }>(
       'sessions/' + data!.case.sessionId + '/provider-tokens',
       'POST',
       { exerciseRunId: id },
     );
-    voice.current.startSession({
+    if (generation !== voiceGeneration.current) return;
+    await voice.current.startSession({
       conversationToken: token.conversationToken,
       connectionType: 'webrtc',
     });
+    if (generation !== voiceGeneration.current) await voice.current.endSession();
   }
+  if (error)
+    return (
+      <>
+        <h1>Teach · Zugriff pausiert</h1>
+        <div role="alert" className="error">
+          {error}
+        </div>
+        <button onClick={refresh}>Aktuellen Zustand erneut laden</button>
+        <a href="/">Zur Prozessübersicht</a>
+      </>
+    );
   return (
     <>
       {data?.context.sourceMode === 'replay' && (
@@ -166,6 +214,7 @@ function Inner({ id }: { id: string }) {
       {(error || localError) && (
         <div className="error" role="alert">
           {error || localError}
+          <button onClick={abandonPendingRequest}>Veralteten Request verwerfen / neu laden</button>
         </div>
       )}
       <div className="grid">

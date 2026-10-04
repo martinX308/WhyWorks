@@ -17,7 +17,7 @@ import { Blueprint } from '../src/application/service';
 import { Store } from '../src/adapters/store';
 
 process.loadEnvFile('.env.local');
-const reportPath = 'docs/provider-smoke-report.json';
+const reportPath = process.env.BLUEPRINT_SMOKE_REPORT || 'docs/provider-smoke-report.json';
 const previous = process.argv.includes('--retry-extraction')
   ? JSON.parse(readFileSync(reportPath, 'utf8'))
   : null;

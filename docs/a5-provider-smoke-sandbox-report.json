@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-04T07:32:02.745Z",
+  "previousEvidenceDate": null,
+  "source": "synthetic_provider_smoke",
+  "countsAsA1LiveAcceptance": false,
+  "countsAsA2LiveAcceptance": false,
+  "model": "claude-sonnet-5-5",
+  "checks": [
+    {
+      "name": "interviewer_configuration",
+      "status": "failed",
+      "durationMs": 16,
+      "error": {
+        "type": "ElevenLabsError",
+        "httpStatus": null,
+        "message": "Provider request failed; credentials and request details omitted."
+      }
+    },
+    {
+      "name": "webrtc_token_issuance",
+      "status": "failed",
+      "durationMs": 2,
+      "error": {
+        "type": "ElevenLabsError",
+        "httpStatus": null,
+        "message": "Provider request failed; credentials and request details omitted."
+      }
+    },
+    {
+      "name": "teachback_tts",
+      "status": "failed",
+      "durationMs": 3,
+      "error": {
+        "type": "ElevenLabsError",
+        "httpStatus": null,
+        "message": "Provider request failed; credentials and request details omitted."
+      }
+    },
+    {
+      "name": "claude_vision_structured_output",
+      "status": "failed",
+      "durationMs": 506,
+      "error": {
+        "type": "Error",
+        "httpStatus": null,
+        "message": "Connection error."
+      }
+    },
+    {
+      "name": "claude_extraction_and_server_gate",
+      "status": "skipped",
+      "durationMs": 0,
+      "evidence": "No real provider transcript available."
+    },
+    {
+      "name": "a2_question_planner",
+      "status": "skipped",
+      "durationMs": 0,
+      "evidence": "No real provider transcript available."
+    }
+  ],
+  "limitations": [
+    "Synthetic image and generated speech; no human expert or browser microphone.",
+    "WebRTC token issuance does not prove an established browser conversation.",
+    "No ten-minute parallel capture, barge-in or Off record network proof.",
+    "No Challenge publish or live question quotas certified.",
+    "Recorded token usage covers retained successful responses, not all diagnostic attempts; provider currency charges not measured."
+  ]
+}

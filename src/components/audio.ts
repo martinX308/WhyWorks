@@ -39,7 +39,9 @@ export async function captureAudio(
     anchorMs: number;
   }) => void,
   onError: (message: string) => void,
+  signal?: AbortSignal,
 ) {
+  signal?.throwIfAborted();
   const connection = await Scribe.connect({
     token,
     modelId: 'scribe_v2_realtime',
@@ -49,15 +51,33 @@ export async function captureAudio(
     languageCode: 'en',
     includeTimestamps: true,
   });
+  let providerClosed = false,
+    stopping = false;
+  connection.on(RealtimeEvents.CLOSE, () => {
+    providerClosed = true;
+    if (!stopping && !signal?.aborted)
+      onError('Scribe-Verbindung beendet. Capture pausieren und erneut verbinden.');
+  });
   let stream: MediaStream | null = null;
   let context: AudioContext | null = null;
+  const abort = () => {
+    stopping = true;
+    connection.close();
+    stream?.getTracks().forEach((t) => t.stop());
+    if (context && context.state !== 'closed') void context.close();
+  };
+  signal?.addEventListener('abort', abort, { once: true });
   try {
+    signal?.throwIfAborted();
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       video: false,
     });
+    signal?.throwIfAborted();
+    if (providerClosed) throw new Error('Scribe-Verbindung vor Audiostart beendet.');
     context = new AudioContext({ sampleRate: 16000 });
     await context.resume();
+    signal?.throwIfAborted();
     const audioContext = context;
     const audioStream = stream;
     if (context.sampleRate !== 16000) {
@@ -67,6 +87,8 @@ export async function captureAudio(
       throw new Error('16-kHz-Audiokontext nicht unterstützt.');
     }
     await context.audioWorklet.addModule('/pcm-worklet.js');
+    signal?.throwIfAborted();
+    if (providerClosed) throw new Error('Scribe-Verbindung vor Audiostart beendet.');
     const source = context.createMediaStreamSource(stream),
       node = new AudioWorkletNode(context, 'pcm-recorder');
     const mute = context.createGain();
@@ -80,7 +102,7 @@ export async function captureAudio(
       total = 0;
     const chunks: { start: number; samples: Int16Array }[] = [];
     node.port.onmessage = (event: MessageEvent<Float32Array>) => {
-      if (!active) return;
+      if (!active || providerClosed || signal?.aborted) return;
       const samples = Int16Array.from(event.data, (n) =>
         Math.round(Math.max(-1, Math.min(1, n)) * (n < 0 ? 32768 : 32767)),
       );
@@ -94,10 +116,10 @@ export async function captureAudio(
       connection.send({ audioBase64: base64(samples.buffer), sampleRate: 16000 });
     };
     connection.on(RealtimeEvents.PARTIAL_TRANSCRIPT, (e) => {
-      if (active) onPartial(e.text);
+      if (active && !providerClosed && !signal?.aborted) onPartial(e.text);
     });
     connection.on(RealtimeEvents.COMMITTED_TRANSCRIPT_WITH_TIMESTAMPS, (e) => {
-      if (!active) return;
+      if (!active || providerClosed || signal?.aborted) return;
       const words = e.words?.filter((w) => w.start !== undefined && w.end !== undefined) || [];
       const start = words[0]?.start,
         end = words.at(-1)?.end;
@@ -124,22 +146,26 @@ export async function captureAudio(
       });
     });
     connection.on(RealtimeEvents.ERROR, () => {
-      if (active)
+      if (active && !providerClosed && !signal?.aborted)
         onError('Scribe-Verbindung fehlgeschlagen. Capture pausieren und erneut verbinden.');
     });
     return {
       stop: async () => {
         active = false;
+        stopping = true;
+        signal?.removeEventListener('abort', abort);
         node.port.onmessage = null;
         node.disconnect();
         source.disconnect();
         audioStream.getTracks().forEach((t) => t.stop());
         connection.close();
         chunks.length = 0;
-        await audioContext.close();
+        if (audioContext.state !== 'closed') await audioContext.close();
       },
     };
   } catch (error) {
+    stopping = true;
+    signal?.removeEventListener('abort', abort);
     connection.close();
     stream?.getTracks().forEach((track) => track.stop());
     if (context && context.state !== 'closed') await context.close();

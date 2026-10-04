@@ -24,7 +24,7 @@ export async function structured<T>(
   images?: string[],
 ): Promise<{ data: T; usage: unknown }> {
   requireThat(process.env.ANTHROPIC_API_KEY, 503, 'credentials', 'ANTHROPIC_API_KEY fehlt.');
-  const client = new Anthropic({ maxRetries: 1, timeout: 30000 });
+  const client = new Anthropic({ maxRetries: 0, timeout: 30000 });
   const format = zodOutputFormat(schema);
   // Strict output schemas forbid extras; constraints are also enforced locally.
   const content: Anthropic.MessageParam['content'] = [
@@ -87,6 +87,7 @@ export type Binding = {
   deviations: string[];
 };
 export async function tutorBinding(app: Blueprint, v: Snapshot, ownerId: string): Promise<Binding> {
+  requireThat(!v.revoked, 409, 'revoked', 'Widerrufene Version darf keinen Tutor provisionieren.');
   const b = app.store.get<Binding>('bindings', v.id);
   if (b?.status === 'ready') {
     requireThat(b.contentHash === v.contentHash, 409, 'binding', 'Falsche Wissenbindung.');
@@ -244,6 +245,12 @@ export async function tutorBinding(app: Blueprint, v: Snapshot, ownerId: string)
       'version_binding',
       'Provider liefert keine feste Agentversion.',
     );
+    requireThat(
+      !app.store.get<Snapshot>('versions', v.id)?.revoked,
+      409,
+      'revoked',
+      'Version während Provisionierung widerrufen; Providerbereinigung offen.',
+    );
     binding.versionId = agent.versionId;
     binding.mode = binding.kbId && binding.procedureId ? 'kb_procedure' : 'runtime_lookup';
     binding.status = 'ready';
@@ -317,7 +324,14 @@ export async function tokens(app: Blueprint, s: Session, ownerId: string, runId?
     'epoch',
     'Voice-Verbindung inzwischen geschlossen.',
   );
-  if (runId) app.context(ownerId, runId);
+  if (runId) {
+    app.store.tx(() => {
+      app.context(ownerId, runId);
+      const run = app.owned<import('../domain/contracts').Run>('runs', runId, ownerId);
+      run.assistance.push('voice_tutor');
+      app.store.put('runs', run, ownerId, s.id);
+    });
+  }
   return { conversationToken: conversation.token, scribeToken: scribe?.token, versionId };
 }
 export async function speakTeachback(text: string) {

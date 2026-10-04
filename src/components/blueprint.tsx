@@ -27,6 +27,7 @@ export function BlueprintPanel({
   const [versionId, setVersion] = useState(''),
     [selected, select] = useState(''),
     [tab, setTab] = useState('Blueprint'),
+    [mapView, setMapView] = useState('both'),
     [evidence, setEvidence] = useState<Evidence | null>(null),
     [error, setError] = useState(''),
     [workflowEdit, setWorkflowEdit] = useState(''),
@@ -157,31 +158,57 @@ export function BlueprintPanel({
       ))}
       {tab === 'Blueprint' && (
         <>
-          <h3>Timeline</h3>
-          <p className="muted">
-            Modellreihenfolge; nur belegte Kanten beschreiben Ablauf und Varianten. Keine ergänzten
-            Zielschritte.
-          </p>
-          {!data?.timeline.length && <p>Keine belegten Prozessschritte.</p>}
-          <ol aria-label="Timeline">
-            {data?.timeline.map((s) => (
-              <li key={s.id}>
-                <button
-                  className="secondary"
-                  aria-pressed={selected === s.id}
-                  onClick={() => select(s.id)}
-                >
-                  {s.title} · {labels[s.provenance]}
-                </button>
-              </li>
+          <div className="actions" role="group" aria-label="Work-Map-Ansicht">
+            {(
+              [
+                ['timeline', 'Nur Timeline'],
+                ['graph', 'Nur Graph'],
+                ['both', 'Timeline und Graph'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                className="secondary"
+                key={value}
+                aria-pressed={mapView === value}
+                onClick={() => setMapView(value)}
+              >
+                {label}
+              </button>
             ))}
-          </ol>
-          <h3>Workflow-Graph</h3>
-          <WorkflowGraph
-            workflow={data?.workflow || { steps: [], edges: [] }}
-            selected={selected}
-            select={select}
-          />
+          </div>
+          {mapView !== 'graph' && (
+            <>
+              <h3>Timeline</h3>
+              <p className="muted">
+                Modellreihenfolge; nur belegte Kanten beschreiben Ablauf und Varianten. Keine
+                ergänzten Zielschritte.
+              </p>
+              {!data?.timeline.length && <p>Keine belegten Prozessschritte.</p>}
+              <ol aria-label="Timeline">
+                {data?.timeline.map((s) => (
+                  <li key={s.id}>
+                    <button
+                      className="secondary"
+                      aria-pressed={selected === s.id}
+                      onClick={() => select(s.id)}
+                    >
+                      {s.title} · {labels[s.provenance]}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+          {mapView !== 'timeline' && (
+            <>
+              <h3>Workflow-Graph</h3>
+              <WorkflowGraph
+                workflow={data?.workflow || { steps: [], edges: [] }}
+                selected={selected}
+                select={select}
+              />
+            </>
+          )}
         </>
       )}
       {tab === 'Blueprint' && data && !data.versions.length && (

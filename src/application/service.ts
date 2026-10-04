@@ -27,8 +27,12 @@ import { requireThat } from './errors';
 import { emptyElicitation, topicKey } from '../domain/elicitation';
 import { acceptance } from './elicitation';
 import { A3 } from './a3';
+import { A4 } from './a4';
 import { projectWorkflow, type Proposal } from '../domain/blueprint';
 export type Asset = {
+  retired?: boolean;
+  originalMarker?: string;
+  originalCaseId?: string;
   id: string;
   sessionId: string;
   ownerId: string;
@@ -160,7 +164,7 @@ export class Blueprint {
         s.epoch++;
         s.epochStartedAt = Date.now();
       }
-      if (next === 'debrief' && ['off_record', 'paused'].includes(s.state)) {
+      if (next === 'debrief' && ['off_record', 'paused', 'debrief'].includes(s.state)) {
         s.epoch++;
         s.epochStartedAt = Date.now();
       }
@@ -296,6 +300,12 @@ export class Blueprint {
     return asset;
   }
   bytes(asset: Asset) {
+    requireThat(
+      !asset.retired,
+      410,
+      'removed',
+      'Quelle entfernt; lokale Dateibereinigung ausstehend.',
+    );
     return readFileSync(asset.file);
   }
   observations(ownerId: string, sessionId: string, events: unknown[], segments: unknown[]) {
@@ -928,6 +938,119 @@ export class Blueprint {
     }
     return this.owned<Asset>('assets', evidenceId, ownerId);
   }
+  // A local owner can also play the learner. Reading owner knowledge is help,
+  // and cannot precede an independent first decision in that browser scope.
+  knowledgeAccess(ownerId: string) {
+    this.store.tx(() => {
+      const runs = this.store
+        .list<Run & { decisions?: { committed: boolean }[] }>('runs')
+        .filter(
+          (r) =>
+            r.ownerId === ownerId &&
+            r.type === 'independent' &&
+            !r.decisions?.at(-1)?.committed &&
+            !this.store.get<Snapshot>('versions', r.versionId)?.revoked,
+        );
+      requireThat(
+        runs.every((r) => r.firstAttempt),
+        409,
+        'independent',
+        'Zuerst unabhängige Erstentscheidung speichern; Owner-Wissen ist Hilfe.',
+      );
+      for (const r of runs) {
+        if (!r.assistance.includes('owner_knowledge')) {
+          r.assistance.push('owner_knowledge');
+          const v = this.store.get<Snapshot>('versions', r.versionId)!;
+          this.store.put('runs', r, ownerId, v.sessionId);
+        }
+      }
+    });
+  }
+  private deleteAsset(s: Session, a: Asset) {
+    try {
+      if (a.file) unlinkSync(a.file);
+      this.store.delete('assets', a.id);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') this.store.delete('assets', a.id);
+      else {
+        a.retired = true;
+        s.localCleanup = 'failed';
+        this.store.put('assets', a, s.ownerId, s.id);
+      }
+    }
+  }
+  // Conservative session dependency closure: reviewed derivatives require new
+  // review after removal. Keep historical identities/hashes, never quote copies.
+  redactDerived(s: Session) {
+    new A4(this).archiveResults(s.ownerId, s.id);
+    for (const v of this.store.list<Snapshot>('versions', s.id)) {
+      v.revoked = true;
+      v.claims = [];
+      v.rules = [];
+      v.workflow = { steps: [], edges: [] };
+      v.gaps = [];
+      v.questions = [];
+      v.elicitation = emptyElicitation();
+      this.store.put('versions', v, s.ownerId, s.id);
+      const binding = this.store.get<{ id: string; status: string; deviations: string[] }>(
+        'bindings',
+        v.id,
+      );
+      if (binding) {
+        binding.status = 'failed';
+        binding.deviations = ['Source revoked; provider cleanup not verified'];
+        this.store.put('bindings', binding, s.ownerId, s.id);
+      }
+    }
+    for (const table of ['proposals', 'evaluations', 'optimizations', 'confirmations'] as const)
+      for (const item of this.store.list<{ id: string }>(table, s.id))
+        this.store.delete(table, item.id);
+    for (const r of this.store.list<Run & { reasonReview?: { note: string } }>('runs', s.id)) {
+      if (r.firstAttempt) r.firstAttempt.reason = '[Quellen entfernt · Text redaktiert]';
+      if (r.reasonReview) r.reasonReview.note = '[Quellen entfernt · Text redaktiert]';
+      this.store.put('runs', r, s.ownerId, s.id);
+    }
+    for (const op of this.store.list<Operation>('operations', s.id)) {
+      op.status = 'cancelled';
+      op.payload = null;
+      op.error = null;
+      this.store.put('operations', op, s.ownerId, s.id);
+    }
+    // Synthesized teach-back also contains source-derived speech.
+    for (const asset of this.store
+      .list<Asset>('assets', s.id)
+      .filter((a) => a.kind === 'teachback')) {
+      this.deleteAsset(s, asset);
+    }
+    s.providerCleanup = 'not_verified';
+    s.epoch++;
+    if (s.state === 'capture' || s.state === 'debrief') s.resumeState = s.state;
+    s.state = 'off_record';
+    s.draft = {
+      revision: s.draft.revision + 1,
+      lastProcessedSegmentSequence: 0,
+      claims: [],
+      rules: [],
+      gaps: [],
+      answerLinks: [],
+    };
+    s.questions = [];
+    s.elicitation = emptyElicitation();
+    s.teachback = null;
+    s.improvement = undefined;
+  }
+  reset(ownerId: string, processId: string) {
+    const p = this.owned<Process>('processes', processId, ownerId);
+    return this.store.tx(() => {
+      const cleanup = this.discardSession(ownerId, p.sessionId);
+      return {
+        ...cleanup,
+        ...this.create(ownerId, p.title, 'live', p.acceptanceProfile),
+        previousProcessId: p.id,
+        providerCleanup: 'not_verified',
+      };
+    });
+  }
   removeSource(ownerId: string, segmentId: string) {
     return this.store.tx(() => {
       const seg = this.store.get<Segment>('segments', segmentId);
@@ -938,24 +1061,16 @@ export class Blueprint {
       const s = this.session(row?.session_id as string, ownerId);
       if (seg.audioId) {
         const a = this.owned<Asset>('assets', seg.audioId, ownerId);
-        try {
-          unlinkSync(a.file);
-        } catch {}
-        this.store.delete('assets', a.id);
+        this.deleteAsset(s, a);
       }
       this.store.delete('segments', segmentId);
-      for (const v of this.store.list<Snapshot>('versions', s.id)) {
-        if (v.claims.some((c) => c.segmentId === segmentId)) {
-          v.revoked = true;
-          this.store.put('versions', v, ownerId, s.id);
-        }
-      }
-      s.draft.claims = s.draft.claims.filter((c) => c.segmentId !== segmentId);
-      s.draft.rules = [];
-      s.draft.revision++;
-      s.teachback = null;
+      this.redactDerived(s);
       this.saveSession(s);
-      return { revoked: true, providerCleanup: 'not_verified' };
+      return {
+        revoked: true,
+        localCleanup: s.localCleanup || 'complete',
+        providerCleanup: 'not_verified',
+      };
     });
   }
   exportSession(ownerId: string, sessionId: string) {
@@ -973,52 +1088,31 @@ export class Blueprint {
       segments: this.store.list('segments', s.id),
       versions: this.store.list('versions', s.id),
       results: this.store.list('actions', s.id),
-      assets: this.store.list<Asset>('assets', s.id).map((a) => ({
-        id: a.id,
-        kind: a.kind,
-        mime: a.mime,
-        atMs: a.atMs,
-        base64: this.bytes(a).toString('base64'),
-      })),
+      assets: this.store
+        .list<Asset>('assets', s.id)
+        .filter((a) => !a.retired)
+        .map((a) => ({
+          id: a.id,
+          kind: a.kind,
+          mime: a.mime,
+          atMs: a.atMs,
+          originalMarker: a.originalMarker,
+          originalCaseId: a.originalCaseId,
+          base64: this.bytes(a).toString('base64'),
+        })),
     };
   }
   discardSession(ownerId: string, sessionId: string) {
-    const assets = this.store.list<Asset>('assets', sessionId);
-    this.store.tx(() => {
+    return this.store.tx(() => {
       const s = this.session(sessionId, ownerId);
-      s.epoch++;
-      s.state = 'off_record';
-      s.draft = {
-        revision: s.draft.revision + 1,
-        lastProcessedSegmentSequence: 0,
-        claims: [],
-        rules: [],
-        gaps: [],
-        answerLinks: [],
-      };
-      s.questions = [];
-      s.elicitation = emptyElicitation();
-      s.resumeState = 'capture';
-      s.teachback = null;
-      for (const v of this.store.list<Snapshot>('versions', s.id)) {
-        v.revoked = true;
-        this.store.put('versions', v, ownerId, s.id);
-      }
-      for (const table of ['segments', 'events', 'assets'] as const)
+      s.localCleanup = 'complete';
+      this.redactDerived(s);
+      for (const table of ['segments', 'events'] as const)
         for (const item of this.store.list<{ id: string }>(table, s.id))
           this.store.delete(table, item.id);
-      for (const op of this.store.list<Operation>('operations', s.id)) {
-        op.status = 'cancelled';
-        op.payload = null;
-        this.store.put('operations', op, ownerId, s.id);
-      }
+      for (const asset of this.store.list<Asset>('assets', s.id)) this.deleteAsset(s, asset);
       this.saveSession(s);
+      return { discarded: true, localCleanup: s.localCleanup, providerCleanup: 'not_verified' };
     });
-    for (const asset of assets) {
-      try {
-        unlinkSync(asset.file);
-      } catch {}
-    }
-    return { discarded: true, providerCleanup: 'not_verified' };
   }
 }

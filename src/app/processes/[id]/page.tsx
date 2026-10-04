@@ -32,16 +32,20 @@ export default function Review({ params }: { params: Promise<{ id: string }> }) 
   const { id } = use(params),
     { data, error, refresh } = useResource<Data>('processes/' + id),
     [localError, setError] = useState(''),
+    [pending, setPending] = useState(false),
     [facts, setFacts] = useState<Facts>(emptyFacts),
     [type, setType] = useState<'coached' | 'independent'>('coached'),
     [edit, setEdit] = useState('');
   async function perform(fn: () => Promise<unknown>) {
+    setPending(true);
     try {
       setError('');
       await fn();
       await refresh();
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setPending(false);
     }
   }
   async function state(next: CaptureState) {
@@ -179,6 +183,11 @@ export default function Review({ params }: { params: Promise<{ id: string }> }) 
               <button onClick={() => perform(() => state('debrief'))}>Debrief öffnen</button>
             )}
             {s?.state === 'debrief' && (
+              <a className="button" href={'/capture/' + s.id}>
+                Gesprochenen Debrief öffnen
+              </a>
+            )}
+            {s?.state === 'debrief' && (
               <button onClick={() => perform(() => state('teachback'))}>
                 Teach-back vorbereiten
               </button>
@@ -227,7 +236,7 @@ export default function Review({ params }: { params: Promise<{ id: string }> }) 
                   <div className="actions" key={kind}>
                     <button
                       className="secondary"
-                      disabled={checked}
+                      disabled={checked || pending}
                       onClick={() =>
                         perform(() =>
                           api('confirmations', 'POST', {
@@ -245,6 +254,14 @@ export default function Review({ params }: { params: Promise<{ id: string }> }) 
                 );
               })}
               <button
+                disabled={
+                  pending ||
+                  !confirmations.every(([kind]) =>
+                    data!.confirmations.some(
+                      (c) => c.kind === kind && c.subjectHash === data!.contentHash,
+                    ),
+                  )
+                }
                 onClick={() =>
                   perform(() =>
                     api('processes/' + id + '/publish', 'POST', {

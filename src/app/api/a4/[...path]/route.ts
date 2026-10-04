@@ -1,3 +1,4 @@
+import { audited } from '@/application/api-audit';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -156,7 +157,7 @@ async function route(req: NextRequest) {
     );
   }
 }
-export const GET = route;
-export const POST = route;
-
-export const PATCH = route;
+const handler = audited(route);
+export const GET = handler;
+export const POST = handler;
+export const PATCH = handler;

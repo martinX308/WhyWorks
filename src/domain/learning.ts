@@ -2,6 +2,11 @@ import type { Action, Facts, Run } from './contracts';
 export type LearningCase = 'L-01' | 'L-02' | 'L-03' | 'custom';
 export type LearningRun = Run & {
   learningCase?: LearningCase;
+  archivedAssessment?: {
+    action: { status: string; firstCorrect: boolean; finalCorrect: boolean };
+    reason: { status: string; review: null };
+    limitation: string;
+  };
   firstRecord?: {
     at: number;
     facts: Facts;

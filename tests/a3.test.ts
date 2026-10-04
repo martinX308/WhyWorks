@@ -219,10 +219,10 @@ describe('A3 – versionierte Projektionen, Gegenfall und Review', () => {
     expect(x.a3.evaluate(owner, x.process.id, x.version.id, x.eventId).outcome).toBe('unknown');
     const original = structuredClone(x.version);
     x.app.removeSource(owner, x.segmentId);
-    expect(x.a3.evaluate(owner, x.process.id, x.version.id, x.eventId).outcome).toBe('unknown');
+    expect(() => x.a3.evaluate(owner, x.process.id, x.version.id, x.eventId)).toThrow('widerrufen');
     const revoked = x.store.get<Snapshot>('versions', original.id)!;
-    expect(revoked.claims).toEqual(original.claims);
-    expect(revoked.rules).toEqual(original.rules);
+    expect(revoked.claims).toEqual([]);
+    expect(revoked.rules).toEqual([]);
     expect(revoked.contentHash).toBe(original.contentHash);
     expect(revoked.revoked).toBe(true);
     x.store.close();

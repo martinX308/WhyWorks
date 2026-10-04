@@ -1,4 +1,4 @@
-# WhyWorks · Operational Blueprint A0–A4
+# WhyWorks · Operational Blueprint A0–A5
 
 Lokale, quellenbasierte Lernschleife gemäß `docs/technical-rfc-001-operational-blueprint.md`, insbesondere §10.2. Die App enthält einen leeren Live-Prozess, Capture, Quellenreview, gesprochenes Teach-back, explizite Freigabe und versiongebundene Übungen mit einem atomaren SQLite-Gate. A2-Logik, A3 Blueprint/Evaluate/Improve und A4 Teach/Results sind implementiert; die vollständige Challenge-Live-Abnahme bleibt offen.
 
@@ -53,6 +53,8 @@ Playwright verwendet das installierte Chrome, zwei Tabs und eine frische tempor�
 
 `pnpm reference-package` regeneriert die ausdrücklich isolierten Referenzdaten aus §10.2. `pnpm format` formatiert die neuen Implementierungsdateien, nicht die beiden RFCs.
 
+- `docs/a5-status.md`: aktueller Hardening- und Abnahmestand.
+- `docs/demo-runbook.md`: Start, begrenzter Reset, Live-/Replay-Pfad und belegbare Pitch-Aussagen.
 - `docs/repository-status-2026-10-04.md`: erneute Gesamtprüfung, reproduzierte Hardening-Lücken und empfohlene nächste Schritte.
 - `docs/a4-status.md`: Teach/Results, Erstentscheidung, versiongebundene Ergebnisse und offene Live-Nachweise.
 - `docs/a3-status.md`: Blueprint/Evaluate/Improve, automatisierte Nachweise, Abweichungen und offene Live-Proben.
@@ -62,4 +64,4 @@ Playwright verwendet das installierte Chrome, zwei Tabs und eine frische tempor�
 - `docs/integration-ledger.md`: offizielle Referenzen, Revision, Lizenz und unmittelbare Prüfungen.
 - `contracts/examples/learning-chain.v1.json`: maschinenlesbare Quellen-/Bestätigungs-/Regelkette.
 
-A1 nutzt ausschließlich `technical_spike` und `exercise_only`. Es bestätigt keine Produktionspolicy und keine vollständige Challenge-Erfüllung. A2-Logik, A3 Blueprint/Evaluate/Improve und A4 Teach/Results sind implementiert und automatisiert geprüft: zuletzt 67 Tests, drei Browser-Szenarien, Typecheck und Produktionsbuild bestanden. Der gesprochene Debrief-Client sowie A0–A2-Live-Abnahmen bleiben offen und haben bei verfügbaren Zugängen Vorrang. A5-Hardening und Lieferung B stehen noch aus. Vor der vollständigen Abnahme sind insbesondere Quellenredaktion, runbezogener Hilfeschutz und die echte Voice-/Expertenkette zu vervollständigen.
+A5-Hardening ist implementiert: Quellenredaktion/Widerruf, unabhängiger Hilfeschutz, gesprochener Debrief, begrenzter Reset und expliziter Export-Replay. Der aktuelle Nachweisstand und die vollständige Bedienfolge stehen in [docs/a5-status.md](docs/a5-status.md) und [docs/demo-runbook.md](docs/demo-runbook.md). Die Startseite bietet sowohl den leeren technischen Spike als auch eine leere Live-Challenge; deren Freigabe verlangt weiterhin echte A2-Nachweise. Replay erfüllt keine Live-Abnahme. Lieferung B bleibt außerhalb des Umfangs.

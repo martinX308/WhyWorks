@@ -9,10 +9,12 @@ const fake = vi.hoisted(() => ({
   tool: vi.fn(),
   procedure: vi.fn(),
   compile: vi.fn(),
+  token: vi.fn(),
 }));
 vi.mock('@elevenlabs/elevenlabs-js', () => ({
   ElevenLabsClient: class {
     conversationalAi = {
+      conversations: { getWebrtcToken: fake.token },
       agents: {
         create: fake.agentCreate,
         get: fake.agentGet,
@@ -23,7 +25,7 @@ vi.mock('@elevenlabs/elevenlabs-js', () => ({
     };
   },
 }));
-import { tutorBinding } from '../src/adapters/providers';
+import { tutorBinding, tokens } from '../src/adapters/providers';
 beforeEach(() => {
   vi.stubEnv('ELEVENLABS_API_KEY', 'test');
   vi.stubEnv('ELEVENLABS_VOICE_ID', 'voice');
@@ -35,6 +37,7 @@ beforeEach(() => {
   fake.tool.mockReset().mockResolvedValue({ id: 'tool' });
   fake.procedure.mockReset().mockResolvedValue({ procedureId: 'proc' });
   fake.compile.mockReset().mockResolvedValue({});
+  fake.token.mockReset().mockResolvedValue({ token: 'simulated-token' });
 });
 function setup() {
   const store = new Store(),
@@ -91,5 +94,31 @@ it('fehlende KB/Procedure ist dokumentierter Runtime-Ersatz; fehlende Version bl
   expect(y.store.get<{ status: string }>('bindings', y.v.id)?.status).toBe('failed');
   x.store.close();
   y.store.close();
+  vi.unstubAllEnvs();
+});
+
+it('Tutor-Token selbst erfasst Hilfe, auch ohne Client Tool; Widerruf während Tokenrequest blockiert', async () => {
+  const { setupA4 } = await import('./a4-fixture');
+  const x = setupA4();
+  const r = x.a4.start('owner', x.v.id, 'L-03');
+  const v = x.store.get<Snapshot>('versions', x.v.id)!;
+  const s = x.app.session(v.sessionId, 'owner');
+  await expect(tokens(x.app, s, 'owner', r.id)).rejects.toThrow('Erstentscheidung');
+  x.a4.attempt('owner', r.id, 'hold', 'Wareneingang fehlt.');
+  await tokens(x.app, s, 'owner', r.id);
+  expect(x.a4.run('owner', r.id).assistance).toEqual(['voice_tutor']);
+  x.a4.action('owner', r.id, {
+    action: 'hold',
+    expectedRecordRevision: 1,
+    expectedFactsRevision: 1,
+    idempotencyKey: 'with-voice',
+  });
+  expect(x.a4.results('owner', r.id).assessment.action.status).toBe('mit Hilfe gelöst');
+  fake.token.mockImplementation(async () => {
+    x.app.removeSource('owner', 'ts');
+    return { token: 'late-token' };
+  });
+  await expect(tokens(x.app, s, 'owner', r.id)).rejects.toThrow('nicht nutzbar');
+  x.store.close();
   vi.unstubAllEnvs();
 });

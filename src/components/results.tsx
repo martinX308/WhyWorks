@@ -104,7 +104,7 @@ export function Results({ id }: { id: string }) {
               </button>
             </div>
           ))}
-          {evidence && (
+          {evidence && !data.version.revoked && (
             <aside aria-label="Originalmoment">
               <blockquote>„{evidence.claim.quote}“</blockquote>
               <p>

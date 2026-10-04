@@ -193,12 +193,14 @@ export const transitions: Record<CaptureState, CaptureState[]> = {
   paused: ['capture', 'debrief', 'off_record', 'drafting'],
   off_record: ['capture', 'debrief'],
   drafting: ['debrief'],
-  debrief: ['teachback', 'off_record', 'paused'],
+  debrief: ['debrief', 'teachback', 'off_record', 'paused'],
   teachback: ['review', 'debrief'],
   review: ['published', 'debrief'],
   published: [],
 };
 export type Session = {
+  providerCleanup?: 'not_verified';
+  localCleanup?: 'complete' | 'failed';
   improvement?: { baseVersionId: string; proposalId?: string };
   id: string;
   ownerId: string;

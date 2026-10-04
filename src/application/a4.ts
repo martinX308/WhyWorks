@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Blueprint } from './service';
+import type { Blueprint } from './service';
 import { A3 } from './a3';
 import { requireThat } from './errors';
 import { assess } from './learning-evaluator';
@@ -214,6 +214,17 @@ export class A4 {
       return response;
     });
   }
+  archiveResults(owner: string, sessionId: string) {
+    this.app.session(sessionId, owner);
+    for (const r of this.app.store.list<LearningRun>('runs', sessionId)) {
+      if (!r.firstAttempt || r.archivedAssessment) continue;
+      const v = this.app.store.get<Snapshot>('versions', r.versionId);
+      if (!v || v.revoked) continue;
+      const result = assess(r, v);
+      r.archivedAssessment = { ...result, reason: { status: result.reason.status, review: null } };
+      this.save(r);
+    }
+  }
   results(owner: string, id: string) {
     const r = this.run(owner, id),
       v = this.version(owner, r, false);
@@ -227,7 +238,7 @@ export class A4 {
         sourceMode: v.sourceMode,
         revoked: v.revoked,
       },
-      assessment: assess(r, v),
+      assessment: v.revoked && r.archivedAssessment ? r.archivedAssessment : assess(r, v),
       claims: v.revoked
         ? []
         : v.claims.map((c) => ({ id: c.id, quote: c.quote, meaning: c.meaning })),

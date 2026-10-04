@@ -35,6 +35,10 @@ export function enqueue(
         ['queued', 'running', 'succeeded'].includes(o.status),
     );
   if (existing) return existing;
+  const failed = app.store
+    .list<Operation>('operations', s.id)
+    .find((o) => o.kind === kind && o.inputHash === inputHash && o.status === 'failed');
+  if (failed) return retry(app, ownerId, failed.id);
   const op: Operation = {
     id: randomUUID(),
     ownerId,
@@ -54,6 +58,32 @@ export function enqueue(
     model: model(),
   };
   return app.store.put('operations', op, ownerId, s.id);
+}
+export function retry(app: Blueprint, ownerId: string, id: string) {
+  return app.store.tx(() => {
+    const op = app.owned<Operation & { retries?: number }>('operations', id, ownerId);
+    const s = app.session(op.sessionId, ownerId);
+    requireThat(
+      op.status === 'failed' && (op.retries || 0) < 1,
+      409,
+      'retry_limit',
+      'Nur ein expliziter Retry pro fehlgeschlagener Operation.',
+    );
+    requireThat(
+      op.epoch === s.epoch &&
+        op.payload !== null &&
+        !['off_record', 'paused', 'published'].includes(s.state) &&
+        op.inputRevision === s.draft.revision,
+      409,
+      'stale_operation',
+      'Operation veraltet; aktuellen Kontext neu erfassen.',
+    );
+    op.retries = (op.retries || 0) + 1;
+    op.status = 'queued';
+    op.error = null;
+    op.leaseExpiresAt = 0;
+    return app.store.put('operations', op, ownerId, s.id);
+  });
 }
 export async function drain(app: Blueprint) {
   for (const candidate of app.store.list<Operation>('operations')) {

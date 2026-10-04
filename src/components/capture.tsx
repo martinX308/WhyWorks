@@ -22,7 +22,8 @@ type Live = {
   contextAt: number;
   screenHash: string | null;
   abort: AbortController;
-  stream: MediaStream;
+  stream: MediaStream | null;
+  phase: 'live' | 'debrief';
   video: HTMLVideoElement;
   audio: Awaited<ReturnType<typeof captureAudio>> | null;
   timer: ReturnType<typeof setInterval> | null;
@@ -63,6 +64,7 @@ function CaptureInner({ id }: { id: string }) {
     [partial, setPartial] = useState(''),
     [waiting, setWaiting] = useState(false),
     [pending, setPending] = useState(false);
+  const teardown = useRef<Promise<unknown>>(Promise.resolve());
   const live = useRef<Live | null>(null),
     current = useRef(data),
     video = useRef<HTMLVideoElement>(null);
@@ -93,15 +95,14 @@ function CaptureInner({ id }: { id: string }) {
   });
   const voice = useRef(conversation);
   voice.current = conversation;
-  async function stop(next: 'paused' | 'off_record' | 'drafting') {
+  async function stop(next: 'paused' | 'off_record' | 'drafting' | 'teachback') {
     const l = live.current;
     if (l) {
       l.active = false;
       l.abort.abort();
       if (l.timer) clearInterval(l.timer);
-      l.stream.getTracks().forEach((t) => t.stop());
-      void l.audio?.stop();
-      voice.current.endSession();
+      l.stream?.getTracks().forEach((t) => t.stop());
+      teardown.current = Promise.allSettled([l.audio?.stop(), voice.current.endSession()]);
       live.current = null;
     }
     setActive(false);
@@ -144,7 +145,7 @@ function CaptureInner({ id }: { id: string }) {
         l.active = false;
         l.abort.abort();
         if (l.timer) clearInterval(l.timer);
-        l.stream.getTracks().forEach((t) => t.stop());
+        l.stream?.getTracks().forEach((t) => t.stop());
         void l.audio?.stop();
         voice.current.endSession();
       }
@@ -155,21 +156,24 @@ function CaptureInner({ id }: { id: string }) {
       data &&
       live.current &&
       data.session.stateRevision >= live.current.startRevision &&
-      (!['capture'].includes(data.session.state) || data.session.epoch !== live.current.epoch)
+      (!['capture', 'debrief'].includes(data.session.state) ||
+        data.session.epoch !== live.current.epoch)
     ) {
       const l = live.current;
       l.active = false;
       l.abort.abort();
       if (l.timer) clearInterval(l.timer);
-      l.stream.getTracks().forEach((t) => t.stop());
-      void l.audio?.stop();
-      voice.current.endSession();
+      l.stream?.getTracks().forEach((t) => t.stop());
+      teardown.current = Promise.allSettled([l.audio?.stop(), voice.current.endSession()]);
       live.current = null;
       setActive(false);
     }
   }, [data]);
+  useEffect(() => {
+    if (error && live.current?.active) void stop('paused');
+  }, [error]);
   async function sample(l: Live) {
-    if (!l.active || l.busy) return;
+    if (!l.active || l.busy || l.phase === 'debrief') return;
     if (
       Date.now() -
         current.current!.session.epochStartedAt +
@@ -266,14 +270,28 @@ function CaptureInner({ id }: { id: string }) {
     setWaiting(true);
     let stream: MediaStream | null = null;
     try {
+      await teardown.current;
       if (!consent) throw new Error('Bitte lokale Originalaudio-Aufnahme bestätigen.');
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const debrief =
+        data!.session.state === 'debrief' ||
+        (['paused', 'off_record'].includes(data!.session.state) &&
+          data!.session.resumeState === 'debrief');
       const v = video.current!;
-      v.srcObject = stream;
-      await v.play();
-      const shot = verifyAndMask(v, data!.session.marker);
+      const lastEvent = data!.events.at(-1);
+      if (debrief && !lastEvent)
+        throw new Error('Debrief braucht einen gespeicherten Screenbezug.');
+      let shot: { geometry: string | null; caseId: string } = {
+        geometry: null,
+        caseId: lastEvent?.caseId || '',
+      };
+      if (!debrief) {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        v.srcObject = stream;
+        await v.play();
+        shot = verifyAndMask(v, data!.session.marker);
+      }
       const s = await api<Session>('sessions/' + id + '/capture-state', 'POST', {
-        state: 'capture',
+        state: debrief ? 'debrief' : 'capture',
         expectedEpoch: data!.session.epoch,
       });
       const l: Live = {
@@ -285,6 +303,7 @@ function CaptureInner({ id }: { id: string }) {
         screenHash: null,
         abort: new AbortController(),
         stream,
+        phase: debrief ? 'debrief' : 'live',
         video: v,
         audio: null,
         timer: null,
@@ -312,10 +331,14 @@ function CaptureInner({ id }: { id: string }) {
         l.abort.signal,
       );
       if (!l.active) return;
-      voice.current.startSession({
+      await voice.current.startSession({
         conversationToken: token.conversationToken,
         connectionType: 'webrtc',
       });
+      if (!l.active) {
+        await voice.current.endSession();
+        return;
+      }
       l.audio = await captureAudio(
         token.scribeToken,
         (t) => {
@@ -370,6 +393,7 @@ function CaptureInner({ id }: { id: string }) {
                     endMs: segment.anchorMs - s.startedAt + segment.endMs,
                     caseId,
                     source: 'expert_statement',
+                    phase: l.phase,
                     text: segment.text,
                     committed: true,
                     audioId,
@@ -391,17 +415,19 @@ function CaptureInner({ id }: { id: string }) {
             void stop('paused');
           }
         },
+        l.abort.signal,
       );
       if (!l.active) {
         await l.audio.stop();
         return;
       }
-      stream.getVideoTracks()[0].onended = () => {
-        if (l.active) {
-          setError('Screenfreigabe beendet.');
-          void stop('paused');
-        }
-      };
+      if (stream)
+        stream.getVideoTracks()[0].onended = () => {
+          if (l.active) {
+            setError('Screenfreigabe beendet.');
+            void stop('paused');
+          }
+        };
       setActive(true);
       await refresh();
       await sample(l);
@@ -410,6 +436,7 @@ function CaptureInner({ id }: { id: string }) {
       setError((e as Error).message);
       stream?.getTracks().forEach((t) => t.stop());
       if (live.current) await stop('paused');
+      else await voice.current.endSession();
     } finally {
       setWaiting(false);
     }
@@ -435,6 +462,21 @@ function CaptureInner({ id }: { id: string }) {
         {},
         l.abort.signal,
       );
+      if (!l.active) return;
+      if ((q as typeof q & { kind?: string }).kind === 'counterfactual') {
+        const event = current.current!.events.find((e) => e.caseId === q.caseId);
+        if (!event) throw new Error('Gegenfall braucht Originalevent.');
+        const cf = await api<{ facts: unknown }>(
+          'sessions/' + id + '/counterfactuals',
+          'POST',
+          { questionId: q.id, baseEventId: event.id },
+          l.abort.signal,
+        );
+        if (!l.active) return;
+        voice.current.sendContextualUpdate(
+          JSON.stringify({ kind: 'HYPOTHETICAL_COUNTERFACTUAL', ...cf }),
+        );
+      }
       l.pendingQuestion = q;
       setPending(true);
     } catch (e) {
@@ -447,7 +489,7 @@ function CaptureInner({ id }: { id: string }) {
     const q = l.pendingQuestion,
       now = performance.now();
     if (
-      Date.now() - l.contextAt > 5000 ||
+      (l.phase === 'live' && Date.now() - l.contextAt > 5000) ||
       q.expiresAt < Date.now() ||
       q.epoch !== l.epoch ||
       q.caseId !== l.caseId ||
@@ -497,7 +539,7 @@ function CaptureInner({ id }: { id: string }) {
         q.epoch !== l.epoch ||
         q.caseId !== l.caseId ||
         q.draftRevision !== current.current?.session.draft.revision ||
-        Date.now() - l.contextAt > 5000 ||
+        (l.phase === 'live' && Date.now() - l.contextAt > 5000) ||
         performance.now() - l.lastScreenChange < 1500 ||
         voice.current.isSpeaking ||
         voice.current.getInputVolume() > 0.08 ||
@@ -538,6 +580,28 @@ function CaptureInner({ id }: { id: string }) {
       {data?.session.sourceMode === 'replay' && (
         <div className="notice">TEST-REPLAY · keine Live-Abnahme</div>
       )}
+      {data?.session.providerCleanup && (
+        <div className="notice">
+          Lokale Quellen redaktiert · Providerbereinigung nicht verifiziert.
+        </div>
+      )}
+      {data?.session.localCleanup === 'failed' && (
+        <div role="alert" className="error">
+          Lokale Dateibereinigung fehlgeschlagen. Quellenzugriff und Versionen sind gesperrt.
+          <button
+            onClick={async () => {
+              try {
+                await api('sessions/' + id, 'DELETE');
+                await refresh();
+              } catch (e) {
+                setError((e as Error).message);
+              }
+            }}
+          >
+            Lokale Dateibereinigung erneut versuchen
+          </button>
+        </div>
+      )}
       <h1>Capture · {data?.session.state || 'Laden'}</h1>
       {(error || localError) && (
         <div role="alert" className="error">
@@ -573,28 +637,40 @@ function CaptureInner({ id }: { id: string }) {
                 !data ||
                 active ||
                 waiting ||
-                !['ready', 'paused', 'off_record'].includes(data.session.state)
+                !['ready', 'paused', 'off_record', 'debrief'].includes(data.session.state)
               }
               onClick={start}
             >
-              {waiting ? 'Verbinden …' : 'Screen und Voice starten / Resume'}
+              {waiting
+                ? 'Verbinden …'
+                : data?.session.state === 'debrief' || data?.session.resumeState === 'debrief'
+                  ? 'Debrief Voice starten / Resume'
+                  : 'Screen und Voice starten / Resume'}
             </button>
             <button className="secondary" disabled={!active} onClick={() => stop('paused')}>
               Pause
             </button>
             <button
               className="danger"
-              disabled={!data || !['capture', 'paused'].includes(data.session.state)}
+              disabled={!data || !['capture', 'debrief', 'paused'].includes(data.session.state)}
               onClick={() => stop('off_record')}
             >
               Off record
             </button>
             <button
               className="secondary"
-              disabled={!data || !['capture', 'paused'].includes(data.session.state)}
-              onClick={() => stop('drafting')}
+              disabled={!data || !['capture', 'debrief', 'paused'].includes(data.session.state)}
+              onClick={() =>
+                stop(
+                  data?.session.state === 'debrief' || data?.session.resumeState === 'debrief'
+                    ? 'teachback'
+                    : 'drafting',
+                )
+              }
             >
-              Capture abschließen
+              {data?.session.state === 'debrief' || data?.session.resumeState === 'debrief'
+                ? 'Debrief abschließen / Teach-back'
+                : 'Capture abschließen'}
             </button>
           </div>
           <video muted playsInline ref={video} />
@@ -633,8 +709,55 @@ function CaptureInner({ id }: { id: string }) {
                 {op.kind} · {op.status}
               </span>
               {op.error && <span>{op.error}</span>}
+              {op.status === 'failed' && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await api('operations/' + op.id + '/retry', 'POST', {});
+                      await refresh();
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                >
+                  Operation erneut versuchen
+                </button>
+              )}
             </div>
           ))}
+          {data?.session.questions.map((q) => (
+            <p key={q.id}>
+              {q.phase} · {q.status} · {q.question}
+            </p>
+          ))}
+          {data?.session.draft.answerLinks
+            .filter((link) => !link.confirmed)
+            .map((link) => (
+              <div className="evidence" key={link.id}>
+                <p>
+                  Antwortzuordnung prüfen · {link.segmentIds.join(', ')} → {link.gapIds.join(', ')}
+                </p>
+                <p>Claims: {link.claimIds.join(', ')}</p>
+                <button
+                  onClick={async () => {
+                    try {
+                      await api('sessions/' + id + '/answer-links', 'POST', {
+                        id: link.id,
+                        expectedDraftRevision: data.session.draft.revision,
+                        segmentIds: link.segmentIds,
+                        claimIds: link.claimIds,
+                        gapIds: link.gapIds,
+                      });
+                      await refresh();
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                >
+                  Geprüfte Antwortzuordnung bestätigen
+                </button>
+              </div>
+            ))}
           <div className="actions">
             <button
               className="secondary"

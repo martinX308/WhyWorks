@@ -464,3 +464,31 @@ describe('API-Verträge und Persistenz', () => {
     expect(app.session(s.id, owner).questions).toHaveLength(0);
   });
 });
+it('A5: direkte generische Evidence/Blueprint/Export-Requests dürfen unabhängige Erstentscheidung nicht umgehen', async () => {
+  const { setupA4 } = await import('./a4-fixture');
+  const x = setupA4();
+  state.store.close();
+  state.store = x.store;
+  const r = x.a4.start('owner', x.v.id, 'L-03');
+  const v = state.store.get<import('../src/domain/contracts').Snapshot>('versions', x.v.id)!;
+  const cookie = 'blueprint_owner=owner';
+  for (const path of [
+    'evidence/ts',
+    'processes/' + v.processId,
+    'processes/' + v.processId + '/a3',
+    'sessions/' + v.sessionId + '/state',
+  ]) {
+    const result = await request(path, 'GET', {}, cookie);
+    expect(result.res.status).toBe(409);
+    expect(JSON.stringify(result.json)).not.toContain(x.text);
+  }
+  expect(
+    (await request('sessions/' + v.sessionId + '/export', 'POST', {}, cookie)).res.status,
+  ).toBe(409);
+  x.a4.attempt('owner', r.id, 'hold', 'Fehlender Wareneingang');
+  expect((await request('evidence/ts', 'GET', {}, cookie)).res.status).toBe(200);
+  expect(x.a4.run('owner', r.id).assistance).toContain('owner_knowledge');
+  const metrics = state.store.list<{ durationMs?: number; status?: number }>('metrics');
+  expect(metrics.some((m) => m.status === 409 && typeof m.durationMs === 'number')).toBe(true);
+  expect(JSON.stringify(metrics)).not.toContain(x.text);
+});

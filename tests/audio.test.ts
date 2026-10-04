@@ -18,6 +18,7 @@ vi.mock('@elevenlabs/client', () => ({
     PARTIAL_TRANSCRIPT: 'partial',
     COMMITTED_TRANSCRIPT_WITH_TIMESTAMPS: 'committed',
     ERROR: 'error',
+    CLOSE: 'close',
   },
 }));
 import { captureAudio } from '../src/components/audio';
@@ -77,6 +78,7 @@ it('Worklet-Fehler beendet Mikrofon und Audiokontext', async () => {
 it('Wortzeit liefert Original-WAV mit Rand; Stop verhindert neue Sends und commits', async () => {
   const stop = vi.fn(),
     committed = vi.fn(),
+    error = vi.fn(),
     nodes: { port: { onmessage: ((e: { data: Float32Array }) => void) | null } }[] = [];
   vi.spyOn(Date, 'now').mockReturnValue(1000);
   vi.stubGlobal('navigator', {
@@ -110,12 +112,7 @@ it('Wortzeit liefert Original-WAV mit Rand; Stop verhindert neue Sends und commi
       disconnect() {}
     },
   );
-  const audio = await captureAudio(
-    'token',
-    () => {},
-    committed,
-    () => {},
-  );
+  const audio = await captureAudio('token', () => {}, committed, error);
   nodes[0].port.onmessage!({ data: new Float32Array(16000).fill(0.2) });
   fake.listeners.get('committed')!({
     text: 'Originalwort',
@@ -127,10 +124,33 @@ it('Wortzeit liefert Original-WAV mit Rand; Stop verhindert neue Sends und commi
   expect(clip.readUInt32LE(24)).toBe(16000);
   expect(clip.length).toBe(44 + 10400 * 2);
   expect(result.anchorMs).toBe(0);
+  fake.listeners.get('close')!({});
+  expect(error).toHaveBeenCalledOnce();
+  nodes[0].port.onmessage!({ data: new Float32Array(16000).fill(0.2) });
   await audio.stop();
   expect(stop).toHaveBeenCalledOnce();
   expect(nodes[0].port.onmessage).toBeNull();
   fake.listeners.get('committed')!({ text: 'Off record', words: [] });
   expect(committed).toHaveBeenCalledOnce();
   expect(fake.send).toHaveBeenCalledOnce();
+});
+it('Off record während Mikrofonfreigabe schließt Scribe sofort und stoppt verspätete Tracks ohne Aufnahme', async () => {
+  const abort = new AbortController(),
+    stop = vi.fn();
+  let resolve!: (stream: unknown) => void;
+  const getUserMedia = vi.fn(
+    () =>
+      new Promise((r) => {
+        resolve = r;
+      }),
+  );
+  vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+  const pending = captureAudio('token', vi.fn(), vi.fn(), vi.fn(), abort.signal);
+  await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+  abort.abort();
+  expect(fake.close).toHaveBeenCalledOnce();
+  resolve({ getTracks: () => [{ stop }] });
+  await expect(pending).rejects.toThrow();
+  expect(stop).toHaveBeenCalledOnce();
+  expect(fake.send).not.toHaveBeenCalled();
 });

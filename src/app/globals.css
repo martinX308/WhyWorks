@@ -284,3 +284,26 @@ pre {
   max-width: 100%;
   overflow: auto;
 }
+/* Long hashes/IDs and owner controls must remain usable on narrow screens. */
+.grid > *,
+.card {
+  min-width: 0;
+}
+p,
+blockquote,
+.notice,
+.error,
+.row {
+  overflow-wrap: anywhere;
+}
+button,
+a.button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+.row,
+.app-header {
+  flex-wrap: wrap;
+}
